@@ -2,8 +2,8 @@
 
 ## BNO055 EXAMPLE
 
-'''
-/* USER CODE END Header */
+
+```/* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
@@ -115,4 +115,4 @@ int main(void)
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
-}'''
+}```
