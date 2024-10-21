@@ -3,7 +3,8 @@
 ## BNO055 EXAMPLE
 
 
-```/* USER CODE END Header */
+```c
+/* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
