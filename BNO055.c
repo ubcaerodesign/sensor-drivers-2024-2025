@@ -4,14 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/**
+ * GLOBAL
+ */
 I2C_HandleTypeDef *BNO055_i2c_port;
-
-uint16_t accelScale = 100;
-uint16_t tempScale = 1;
-uint16_t angularRateScale = 16;
-uint16_t eulerScale = 16;
-uint16_t magScale = 16;
-uint16_t quaScale = (1<<14); // 2^14
 
 double theta_F_old = 0, phi_F_old = 0;
 double theta = 0, phi = 0;
@@ -128,6 +124,7 @@ void BNO055_setAxisSign(BNO055_axis_remap_sign_t remapsign) {
 
 
 void BNO055_setup() {
+
   BNO055_reset();
 
   uint8_t id = 0;

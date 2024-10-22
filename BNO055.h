@@ -10,6 +10,13 @@
 #define ACCEL_SYNC_THRESHOLD 0.15
 #define GRAVITY 9.80665
 
+#define accelScale 100.0
+#define tempScale 1.0
+#define angularRateScale 16.0
+#define eulerScale 16.0
+#define magScale 16.0
+#define quaScale ((double)(1<<14)) // 2^14
+
 #define BNO055_I2C_ADDR_HI 0x29
 #define BNO055_I2C_ADDR_LO 0x28
 #define BNO055_I2C_ADDR    BNO055_I2C_ADDR_HI
