@@ -10,7 +10,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <math.h>
 #include "BNO055.h"
 
 /* USER CODE END Includes */
@@ -33,6 +32,8 @@
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
 
+SPI_HandleTypeDef hspi2;
+
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
@@ -44,6 +45,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_SPI2_Init(void);
 /* USER CODE BEGIN PFP */
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 
@@ -85,12 +87,18 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_USART1_UART_Init();
+  MX_SPI2_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
   BNO055_assignI2C(&hi2c1);
   BNO055_setup();
 
-  BNO055_calibrationRoutine();
+  /* Uncomment and use if you would like to calibrate or re-calibrate BNO..requires SD card */
+  //BNO055_calibrationRoutine();
+
+  /* Uncomment and use if you have ran BNO055_calibrationRoutine() once/before...requires SD card */
+  //BNO055_loadCalibrationDataSD();
 
   BNO055_vector_t quaternion, euler, refQuaternion, refGravity;
   double heading;
@@ -111,6 +119,7 @@ int main(void)
 	  BNO055_getMagneticHeading(&refQuaternion, &refGravity, &quaternion, &heading);
 	  printf("heading = %f\r\n", heading);
 	  HAL_Delay(500);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

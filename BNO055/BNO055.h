@@ -4,7 +4,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <stdlib.h>
 #include "stm32f1xx_hal.h" /* Needed for I2C */
+#include "fatfs.h"
 
 #define ACCEL_SYNC_TIME 500
 #define ACCEL_SYNC_THRESHOLD 0.15
@@ -250,6 +254,8 @@ void BNO055_setup();
 bool BNO055_getCalibrationState(BNO055_calibration_state_t *calState);
 void BNO055_getCalibrationData(BNO055_offsets_t *calData, BNO055_calibration_state_t *calState);
 void BNO055_setCalibrationData(BNO055_offsets_t *calData);
+void BNO055_saveCalibrationDataSD(BNO055_offsets_t *calData);
+void BNO055_loadCalibrationDataSD();
 void BNO055_displayCalibrationData(BNO055_offsets_t *calData);
 void BNO055_calibrationRoutine();
 

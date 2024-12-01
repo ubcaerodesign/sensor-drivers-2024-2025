@@ -1,12 +1,11 @@
 #include "BNO055.h"
-#include <string.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 /**
  * GLOBAL
  */
+FATFS fs;
+FIL fil;
+
 I2C_HandleTypeDef *BNO055_i2c_port;
 
 double theta_F_old = 0, phi_F_old = 0;
@@ -153,9 +152,12 @@ bool BNO055_getCalibrationState(BNO055_calibration_state_t *calState) {
   calState->accel = (cal >> 2) & 0x03;
   calState->mag = cal & 0x03;
 
-  if((calState->sys == 3) && (calState->gyro == 3) && (calState->accel == 3) && (calState->mag == 3)){
+  /*if((calState->sys == 3) && (calState->gyro == 3) && (calState->accel == 3) && (calState->mag == 3)){
 	  return true;
-  }
+  }*/
+  if((calState->gyro == 3)){
+  	  return true;
+    }
   else{
 	  return false;
   }
@@ -167,7 +169,7 @@ void BNO055_getCalibrationData(BNO055_offsets_t *calData, BNO055_calibration_sta
 
 	if(BNO055_getCalibrationState(calState)){ //double check that bno is fully calibrated
 
-		BNO055_setOperationModeConfig();
+		BNO055_setOperationModeConfig(); // wait why do i set this in op mode first i thought op mode was for WRITING to registers
 
 		BNO055_readRegister(BNO055_ACC_OFFSET_X_LSB, buffer, 22);
 
@@ -191,10 +193,12 @@ void BNO055_getCalibrationData(BNO055_offsets_t *calData, BNO055_calibration_sta
 
 	}
 
+	BNO055_saveCalibrationDataSD(calData); // save new offsets into SD card
+
 }
 
 void BNO055_setCalibrationData(BNO055_offsets_t *calData) {
-	uint8_t buffer[22];
+	uint8_t buffer[22]; // wait is this also 22?
 	memcpy(buffer, calData, 22);
 
 	BNO055_setOperationModeConfig();
@@ -204,6 +208,55 @@ void BNO055_setCalibrationData(BNO055_offsets_t *calData) {
 	}
 
 	BNO055_setOperationModeNDOF();
+}
+
+void BNO055_saveCalibrationDataSD(BNO055_offsets_t *calData){
+
+	char buffer[77];
+	//Each integer might take up to 6 characters for a large value (e.g., 1000000), plus a comma for separation
+	//11 integers can require up to 11 * 7 = 77 characters (including commas)
+
+	snprintf(buffer, sizeof(buffer), "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+	calData->accel_offset_x,calData->accel_offset_y, calData->accel_offset_z,
+	calData->gyro_offset_x,calData->gyro_offset_y, calData->gyro_offset_z,
+	calData->mag_offset_x,calData->mag_offset_y, calData->mag_offset_z,
+	calData->accel_radius,calData->mag_radius);
+
+	f_mount(&fs, "", 0);
+	f_open(&fil, "BNO055_OFFSETS.csv", FA_OPEN_ALWAYS | FA_WRITE | FA_READ);
+	f_lseek(&fil, 0);  // Start of file
+	f_puts(buffer, &fil);
+	f_close(&fil);
+
+}
+
+/**
+ * THIS IS FOR IF YOU HAVE CALBIRATED ONCE AND SAVED IT TO THE SD CARD
+ * Reads the offsets from the .csv file saved on the SD card and applies the offsets to the bno
+ */
+
+void BNO055_loadCalibrationDataSD(){
+
+	BNO055_offsets_t calDataStruct;
+	BNO055_offsets_t *calData = &calDataStruct;
+	char buffer[77];
+
+	f_open(&fil, "BNO055_OFFSETS.csv", FA_READ);
+
+	f_gets(buffer, sizeof(buffer), &fil);
+
+	f_close(&fil);
+
+	sscanf(buffer, "%hd,%hd,%hd,%hd,%hd,%hd,%hd,%hd,%hd,%hd,%hd",
+			&calData->accel_offset_x,&calData->accel_offset_y, &calData->accel_offset_z,
+			&calData->gyro_offset_x,&calData->gyro_offset_y, &calData->gyro_offset_z,
+			&calData->mag_offset_x,&calData->mag_offset_y, &calData->mag_offset_z,
+			&calData->accel_radius,&calData->mag_radius);
+
+
+	BNO055_displayCalibrationData(calData);
+	BNO055_setCalibrationData(calData);
+
 }
 
 void BNO055_displayCalibrationData(BNO055_offsets_t *calData){
@@ -237,7 +290,7 @@ void BNO055_calibrationRoutine(){
 		HAL_Delay(500);
 
 	}
-	printf("--------CALIBRATION COMPLETE STORING INTO EEPROM--------\r\n");
+	printf("--------CALIBRATION COMPLETE STORING INTO MEMORY--------\r\n");
 	BNO055_getCalibrationData(&calData, &calState);
 	BNO055_displayCalibrationData(&calData);
 	BNO055_setCalibrationData(&calData);
