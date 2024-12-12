@@ -152,12 +152,9 @@ bool BNO055_getCalibrationState(BNO055_calibration_state_t *calState) {
   calState->accel = (cal >> 2) & 0x03;
   calState->mag = cal & 0x03;
 
-  /*if((calState->sys == 3) && (calState->gyro == 3) && (calState->accel == 3) && (calState->mag == 3)){
+  if((calState->sys == 3) && (calState->gyro == 3) && (calState->accel == 3) && (calState->mag == 3)){
 	  return true;
-  }*/
-  if((calState->gyro == 3)){
-  	  return true;
-    }
+  }
   else{
 	  return false;
   }
