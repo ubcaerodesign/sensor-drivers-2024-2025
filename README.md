@@ -2,6 +2,7 @@
 
 ## BNO055 EXAMPLE
 
+Change **BNO055_I2C_ADDR** in header file to match your i2c address.
 
 ```c
 /* USER CODE END Header */
@@ -91,14 +92,21 @@ int main(void)
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
-  BNO055_assignI2C(&hi2c1);
+  BNO055_assignI2C(&hi2c1); //Change depending on your configs
   BNO055_setup();
 
-  /* Uncomment and use if you would like to calibrate or re-calibrate BNO..requires SD card */
-  //BNO055_calibrationRoutine();
+  /* Uncomment and use if you would like to calibrate or re-calibrate BNO. Otherwise, don't need this.
+   * If want to save in eeprom: USE_EEPROM
+   * If want to save in sd card: USE_SD
+   */
+  //BNO055_calibrationRoutine(USE_EEPROM);
 
-  /* Uncomment and use if you have ran BNO055_calibrationRoutine() once/before...requires SD card */
-  //BNO055_loadCalibrationDataSD();
+  /* Uncomment and use if you have ran BNO055_calibrationRoutine() once/before.
+   * Keep using this once there are calibration offsets stored.
+   * If want to load from eeprom: USE_EEPROM
+   * If want to load from sd card: USE_SD
+   */
+  //BNO055_loadCalibrationData(USE_EEPROM);
 
   BNO055_vector_t quaternion, euler, refQuaternion, refGravity;
   double heading;

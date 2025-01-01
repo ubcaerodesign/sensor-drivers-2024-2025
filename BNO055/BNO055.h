@@ -7,7 +7,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
-#include "stm32f1xx_hal.h" /* Needed for I2C */
+#include "stm32h7xx_hal.h" /* Needed for I2C, name changes depending on mcu family */
 #include "fatfs.h"
 
 #define ACCEL_SYNC_TIME 500
@@ -23,7 +23,11 @@
 
 #define BNO055_I2C_ADDR_HI 0x29
 #define BNO055_I2C_ADDR_LO 0x28
-#define BNO055_I2C_ADDR    BNO055_I2C_ADDR_HI
+#define BNO055_I2C_ADDR    BNO055_I2C_ADDR_LO
+#define EEPROM_I2C_ADDR 0x50
+
+#define USE_SD 0
+#define USE_EEPROM 1
 
 /**
  * Registers
@@ -239,7 +243,9 @@ typedef struct {
 
 void BNO055_assignI2C(I2C_HandleTypeDef *hi2c_device);
 void BNO055_writeRegister(uint8_t reg, uint8_t data);
+void EEPROM_writeRegister16(uint16_t reg, uint8_t data);
 void BNO055_readRegister(uint8_t reg, uint8_t *data, uint8_t len);
+void EEPROM_readRegister16(uint16_t reg, uint8_t *data, uint8_t len);
 
 void BNO055_setPage(uint8_t page);
 void BNO055_reset();
@@ -252,12 +258,15 @@ void BNO055_setAxisSign(BNO055_axis_remap_sign_t remapsign);
 void BNO055_setup();
 
 bool BNO055_getCalibrationState(BNO055_calibration_state_t *calState);
-void BNO055_getCalibrationData(BNO055_offsets_t *calData, BNO055_calibration_state_t *calState);
+void BNO055_getCalibrationData(BNO055_offsets_t *calData, BNO055_calibration_state_t *calState, int flag);
 void BNO055_setCalibrationData(BNO055_offsets_t *calData);
+void BNO055_saveCalibrationDataEEPROM(BNO055_offsets_t *calData);
+void BNO055_loadCalibrationDataEEPROM();
 void BNO055_saveCalibrationDataSD(BNO055_offsets_t *calData);
 void BNO055_loadCalibrationDataSD();
+void BNO055_loadCalibrationData(int flag);
 void BNO055_displayCalibrationData(BNO055_offsets_t *calData);
-void BNO055_calibrationRoutine();
+void BNO055_calibrationRoutine(int flag);
 
 void BNO055_getVector(uint8_t vec, BNO055_vector_t *xyz);
 void BNO055_getVectorAccelerometer(BNO055_vector_t *xyz);
