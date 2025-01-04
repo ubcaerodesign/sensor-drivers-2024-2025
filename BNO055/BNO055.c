@@ -3,8 +3,8 @@
 /**
  * GLOBAL
  */
-FATFS fs;
-FIL fil;
+FATFS fs_bno;
+FIL fil_bno;
 
 I2C_HandleTypeDef *BNO055_i2c_port;
 
@@ -205,7 +205,10 @@ bool BNO055_getCalibrationState(BNO055_calibration_state_t *calState) {
 	calState->accel = (cal >> 2) & 0x03;
 	calState->mag = cal & 0x03;
 
-	if((calState->sys == 3) && (calState->gyro == 3) && (calState->accel == 3) && (calState->mag == 3)){
+	/*if((calState->sys == 3) && (calState->gyro == 3) && (calState->accel == 3) && (calState->mag == 3)){
+	  return true;
+	}*/
+	if((calState->gyro == 3)){
 	  return true;
 	}
 	else{
@@ -325,11 +328,11 @@ void BNO055_saveCalibrationDataSD(BNO055_offsets_t *calData){
 	calData->mag_offset_x,calData->mag_offset_y, calData->mag_offset_z,
 	calData->accel_radius,calData->mag_radius);
 
-	f_mount(&fs, "", 0);
-	f_open(&fil, "BNO055_OFFSETS.csv", FA_OPEN_ALWAYS | FA_WRITE | FA_READ);
-	f_lseek(&fil, 0);  // Start of file
-	f_puts(buffer, &fil);
-	f_close(&fil);
+	f_mount(&fs_bno, "", 0);
+	f_open(&fil_bno, "BNO055_OFFSETS.csv", FA_OPEN_ALWAYS | FA_WRITE | FA_READ);
+	f_lseek(&fil_bno, 0);  // Start of file
+	f_puts(buffer, &fil_bno);
+	f_close(&fil_bno);
 
 }
 
@@ -344,11 +347,11 @@ void BNO055_loadCalibrationDataSD(){
 	BNO055_offsets_t *calData = &calDataStruct;
 	char buffer[77];
 
-	f_open(&fil, "BNO055_OFFSETS.csv", FA_READ);
+	f_open(&fil_bno, "BNO055_OFFSETS.csv", FA_READ);
 
-	f_gets(buffer, sizeof(buffer), &fil);
+	f_gets(buffer, sizeof(buffer), &fil_bno);
 
-	f_close(&fil);
+	f_close(&fil_bno);
 
 	sscanf(buffer, "%hd,%hd,%hd,%hd,%hd,%hd,%hd,%hd,%hd,%hd,%hd",
 			&calData->accel_offset_x,&calData->accel_offset_y, &calData->accel_offset_z,
