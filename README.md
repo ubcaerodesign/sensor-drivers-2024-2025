@@ -31,7 +31,7 @@ Change **BNO055_I2C_ADDR** in header file to match your i2c address.
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c4;
 
 SPI_HandleTypeDef hspi2;
 
@@ -44,7 +44,7 @@ UART_HandleTypeDef huart1;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_I2C1_Init(void);
+static void MX_I2C4_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_SPI2_Init(void);
 /* USER CODE BEGIN PFP */
@@ -92,7 +92,7 @@ int main(void)
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
-  BNO055_assignI2C(&hi2c1); //Change depending on your configs
+  BNO055_assignI2C(&hi2c4); //Change depending on your configs
   BNO055_setup();
 
   /* Uncomment and use if you would like to calibrate or re-calibrate BNO. Otherwise, don't need this.
@@ -108,10 +108,7 @@ int main(void)
    */
   //BNO055_loadCalibrationData(USE_EEPROM);
 
-  BNO055_vector_t quaternion, euler, refQuaternion, refGravity;
-  double heading;
-
-  BNO055_getReferences(&refQuaternion, &refGravity);
+  BNO055_vector_t euler;
 
   /* USER CODE END 2 */
 
@@ -119,14 +116,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  BNO055_getVectorQuaternion(&quaternion);
-	  BNO055_getVectorEuler_fromVectorQuaternion(&quaternion,&euler);
-	  printf("roll = %f, pitch = %f, yaw = %f\r\n", euler.x,euler.y,euler.z);
-	  HAL_Delay(500);
-
-	  BNO055_getMagneticHeading(&refQuaternion, &refGravity, &quaternion, &heading);
-	  printf("heading = %f\r\n", heading);
-	  HAL_Delay(500);
+    BNO055_getVectorEuler(&euler);
+	  printf("yaw = %f, roll = %f, pitch = %f\r\n", euler.x,euler.y,euler.z*(-1));
+	  HAL_Delay(300);
 
     /* USER CODE END WHILE */
 
