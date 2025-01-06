@@ -108,7 +108,7 @@ int main(void)
    */
   //BNO055_loadCalibrationData(USE_EEPROM);
 
-  BNO055_vector_t euler;
+  BNO055_vector_t euler, quaternion;
 
   /* USER CODE END 2 */
 
@@ -118,6 +118,11 @@ int main(void)
   {
     BNO055_getVectorEuler(&euler);
 	  printf("yaw = %f, roll = %f, pitch = %f\r\n", euler.x,euler.y,euler.z*(-1));
+	  HAL_Delay(300);
+
+    //for quaterions:
+    BNO055_getVectorQuaternion(&quaternion);
+    printf("w= %f, x= %f, y= %f, z= %f\r\n", quaternion.w,quaternion.x,euler.y,euler.z);
 	  HAL_Delay(300);
 
     /* USER CODE END WHILE */
