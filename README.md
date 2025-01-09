@@ -116,13 +116,22 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
     BNO055_getVectorEuler(&euler);
 	  printf("yaw = %f, roll = %f, pitch = %f\r\n", euler.x,euler.y,euler.z*(-1));
 	  HAL_Delay(300);
 
-    //for quaterions:
+    //for sensor fusion:
     BNO055_getVectorQuaternion(&quaternion);
     printf("w= %f, x= %f, y= %f, z= %f\r\n", quaternion.w,quaternion.x,euler.y,euler.z);
+	  HAL_Delay(300);
+
+    BNO055_getVectorGyroscope(&velo);
+	  printf("veloN = %f, veloE = %f, veloD = %f\r\n", velo.x,velo.y,velo.z);
+	  HAL_Delay(300);*/
+
+	  BNO055_getVectorAccelerometer(&accel);
+	  printf("accelX = %f, accelY = %f, accelZ = %f\r\n", accel.x,accel.y,accel.z);
 	  HAL_Delay(300);
 
     /* USER CODE END WHILE */
