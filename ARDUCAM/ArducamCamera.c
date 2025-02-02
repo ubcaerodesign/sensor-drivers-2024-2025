@@ -9,7 +9,6 @@
  */
 
 #include "ArducamCamera.h"
-#include "Stm32Hal.h"
 
 /// @cond
 
@@ -212,8 +211,8 @@ void updateCameraInfo(ArducamCamera* camera){
 
 void cameraInit(ArducamCamera* camera)
 {
-    arducamSpiBegin();
-    arducamCsOutputMode(camera->csPin);
+    //arducamSpiBegin();
+    //arducamCsOutputMode(camera->csPin);
     arducamSpiCsPinLow(camera->csPin);
 }
 
@@ -262,7 +261,7 @@ CamStatus cameraBegin(ArducamCamera* camera)
 
 void cameraSetCapture(ArducamCamera* camera)
 {
-    // flushFifo(camera);
+    //flushFifo(camera);
     clearFifoFlag(camera);
     startCapture(camera);
     while (getBit(camera, ARDUCHIP_TRIG, CAP_DONE_MASK) == 0)
@@ -296,7 +295,7 @@ uint8_t cameraGetAutoFocusSta(ArducamCamera* camera)
    //step 2  read real sensor register
     writeReg(camera, CAM_REG_SENSOR_RESET, CAM_I2C_READ_MODE);
     waitI2cIdle(camera); // Wait I2c Idle
-    HAL_Delay(5); // wait read finish
+    //arducamDelayMs(5); // wait read finish
    // step 3  get value
     return readReg(camera, SENSOR_DATA);
 }
@@ -345,6 +344,29 @@ CamStatus cameraTakePicture(ArducamCamera* camera, CAM_IMAGE_MODE mode, CAM_IMAG
         writeReg(camera, CAM_REG_CAPTURE_RESOLUTION, CAM_SET_CAPTURE_MODE | mode);
         waitI2cIdle(camera); // Wait I2c Idle
     }
+	/*writeReg(camera, CAM_REG_FORMAT, pixel_format); // set the data format
+	waitI2cIdle(camera);
+	uint8_t value = readReg(camera, CAM_REG_FORMAT);
+	printf("pixel format: 0x%02X\r\n", value);
+
+	writeReg(camera, CAM_REG_CAPTURE_RESOLUTION, CAM_SET_CAPTURE_MODE |mode);
+	waitI2cIdle(camera); // Wait I2c Idle
+	value = readReg(camera, CAM_REG_CAPTURE_RESOLUTION);
+	printf("pixel format: 0x%02X\r\n", value);
+
+    uint8_t writeData = 0x33;
+    uint8_t readData = 0x00;
+
+    writeReg(camera, 0x00, writeData); // Write 0x55 to TEST_REG (0x00)
+    waitI2cIdle(camera); // Wait for the camera to process the write
+	readData = readReg(camera, 0x00);
+	printf("Written: 0x%02X, Read: 0x%02X\r\n", writeData, readData);
+
+	  if (readData == writeData) {
+		  printf("TEST_REG write-read verification successful!\r\n");
+	  } else {
+		  printf("TEST_REG write-read verification failed!\r\n");
+	  }*/
 
     setCapture(camera);
     return CAM_ERR_SUCCESS;
@@ -553,6 +575,8 @@ CamStatus cameraSetBrightness(ArducamCamera* camera, CAM_BRIGHTNESS_LEVEL level)
 {
     writeReg(camera, CAM_REG_BRIGHTNESS_CONTROL, level); // set Brightness Level
     waitI2cIdle(camera);                                 // Wait I2c Idle
+    uint8_t value = readReg(camera, CAM_REG_BRIGHTNESS_CONTROL);
+    printf("brightness: 0x%02X\r\n", value);
     return CAM_ERR_SUCCESS;
 }
 void cameraFlushFifo(ArducamCamera* camera)
@@ -596,11 +620,13 @@ void cameraSetFifoBurst(ArducamCamera* camera)
 uint8_t cameraReadByte(ArducamCamera* camera)
 {
     uint8_t data = 0;
-    arducamSpiCsPinLow(camera->csPin);
-    arducamSpiTransfer(SINGLE_FIFO_READ);
-    arducamSpiTransfer(0x00);
-    data = arducamSpiTransfer(0x00);
-    arducamSpiCsPinHigh(camera->csPin);
+    //arducamSpiCsPinLow(camera->csPin);
+    //arducamSpiTransfer(SINGLE_FIFO_READ);
+    //arducamSpiTransfer(0x00);
+    //data = arducamSpiTransfer(0x00);
+    //arducamSpiCsPinHigh(camera->csPin);
+    //Camera_ReadRegister(SINGLE_FIFO_READ);
+    data = Camera_ReadRegister(SINGLE_FIFO_READ);
     camera->receivedLength -= 1;
     return data;
 }
@@ -628,7 +654,7 @@ uint32_t cameraReadBuff(ArducamCamera* camera, uint8_t* buff, uint32_t length)
         buff[count] = arducamSpiTransfer(0x00);
     }
 #else
-    arducamSpiBlockTransfer(0x00, buff, length);
+    arducamSpiReadBlock(buff, length);
 #endif
     arducamSpiCsPinHigh(camera->csPin);
     camera->receivedLength -= length;
@@ -637,23 +663,27 @@ uint32_t cameraReadBuff(ArducamCamera* camera, uint8_t* buff, uint32_t length)
 
 void cameraWriteReg(ArducamCamera* camera, uint8_t addr, uint8_t val)
 {
-    busWrite(camera, addr | 0x80, val);
+    //busWrite(camera, addr | 0x80, val);
+	busWrite(camera, addr, val);
 }
 
 uint8_t cameraReadReg(ArducamCamera* camera, uint8_t addr)
 {
     uint8_t data;
-    data = busRead(camera, addr & 0x7F);
+    //data = busRead(camera, addr & 0x7F);
+    data = busRead(camera, addr);
     return data;
 }
 
 uint8_t cameraBusWrite(ArducamCamera* camera, int address, int value)
 {
-    arducamSpiCsPinLow(camera->csPin);
-    arducamSpiTransfer(address);
-    arducamSpiTransfer(value);
-    arducamSpiCsPinHigh(camera->csPin);
-    //HAL_Delay(1);
+    //arducamSpiCsPinLow(camera->csPin);
+    //arducamSpiTransfer(address);
+    //arducamSpiTransfer(value);
+    //arducamSpiCsPinHigh(camera->csPin);
+    //arducamDelayMs(1);
+	Camera_WriteRegister(address, value);
+	HAL_Delay(1);
     return 1;
 }
 
@@ -669,18 +699,21 @@ void cameraCsLow(ArducamCamera* camera)
 uint8_t cameraBusRead(ArducamCamera* camera, int address)
 {
     uint8_t value;
-    arducamSpiCsPinLow(camera->csPin);
-    arducamSpiTransfer(address);
-    value = arducamSpiTransfer(0x00);
-    value = arducamSpiTransfer(0x00);
-    arducamSpiCsPinHigh(camera->csPin);
+    //arducamSpiCsPinLow(camera->csPin);
+    //arducamSpiTransfer(address);
+    //value = arducamSpiTransfer(0x00);
+    //value = arducamSpiTransfer(0x00);
+    //arducamSpiCsPinHigh(camera->csPin);
+    Camera_ReadRegister(address);
+    value = Camera_ReadRegister(address);
     return value;
 }
 
 void cameraWaitI2cIdle(ArducamCamera* camera)
 {
     while ((readReg(camera, CAM_REG_SENSOR_STATE) & 0X03) != CAM_REG_SENSOR_STATE_IDLE) {
-       ;// HAL_Delay(2);
+    	HAL_Delay(2);
+       // arducamDelayMs(2);
     }
 }
 

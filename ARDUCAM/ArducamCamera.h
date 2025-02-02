@@ -1,15 +1,18 @@
 /*
- * ArducamCamera.h
+ * This file is part of the Arducam SPI Camera project.
  *
- *  Created on: Jan 9, 2025
- *      Author: ryanz
+ * Copyright 2021 Arducam Technology co., Ltd. All Rights Reserved.
+ *
+ * This work is licensed under the MIT license, see the file LICENSE for
+ * details.
+ *
  */
 
-#ifndef SRC_ARDUCAMCAMERA_H_
-#define SRC_ARDUCAMCAMERA_H_
-
-
+#ifndef __ARDUCAM_H
+#define __ARDUCAM_H
 #include <stdint.h>
+#include <stdio.h>
+#include "spi.h"
 /**
  * @file ArducamCamera.h
  * @author Arducam
@@ -701,4 +704,4 @@ struct ClassCamera {
 #ifdef __cplusplus
 }
 #endif
-#endif /* SRC_ARDUCAMCAMERA_H_ */
+#endif /*__ARDUCAM_H*/
