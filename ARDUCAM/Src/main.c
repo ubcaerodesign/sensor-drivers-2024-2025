@@ -422,6 +422,126 @@ void cameraCaptureAndSaveImage(ArducamCamera* camera) {
     printf("DONE, saved to SD card..\r\n");
 }
 
+/**
+ * @brief Captures an image and saves it to SD card using DMA for efficient data transfer
+ *
+ * @param camera ArducamCamera instance
+ */
+void cameraCaptureAndSaveImageDMA(ArducamCamera* camera) {
+    uint8_t imageBuff[READ_IMAGE_LENGTH]; // Buffer to store image data
+    char uniqueFilename[32];
+    uint8_t headerDetectBuff[2] = {0, 0}; // Buffer to detect JPEG markers
+    uint32_t bytesToRead = 0;
+    uint32_t bufferOffset = 0;
+    bool jpegStarted = false;
+    bool jpegEnded = false;
+    FIL jpegFile;
+    FRESULT fileResult;
+    UINT bytesWritten;
+
+    printf("Taking picture with DMA...\r\n");
+
+    // Generate unique filename
+    generateImgName(uniqueFilename, sizeof(uniqueFilename));
+    printf("Saving as: %s\r\n", uniqueFilename);
+
+    // Capture the image
+    takePicture(camera, CAM_IMAGE_MODE_VGA, CAM_IMAGE_PIX_FMT_JPG);
+    printf("Image capture complete, size: %ld bytes\r\n", camera->receivedLength);
+
+    // Mount the filesystem
+    if (f_mount(&SDFatFS, "", 0) != FR_OK) {
+        printf("Failed to mount SD card\r\n");
+        return;
+    }
+
+    // Use a state machine approach for processing the JPEG data
+    while (camera->receivedLength > 0 && !jpegEnded) {
+        // Read data in chunks using DMA for efficiency
+        bytesToRead = (camera->receivedLength > READ_IMAGE_LENGTH) ?
+                       READ_IMAGE_LENGTH : camera->receivedLength;
+
+        if (bytesToRead > 0) {
+            uint32_t actualRead = readBuffDMA(camera, imageBuff, bytesToRead);
+
+            if (actualRead == 0) {
+                printf("Error reading from camera\r\n");
+                break;
+            }
+
+            // Process the buffer to detect JPEG markers
+            for (uint32_t i = 0; i < actualRead; i++) {
+                // Shift buffer to track potential JPEG markers
+                headerDetectBuff[0] = headerDetectBuff[1];
+                headerDetectBuff[1] = imageBuff[i];
+
+                // Check for JPEG start marker (0xFF 0xD8)
+                if (!jpegStarted && headerDetectBuff[0] == 0xFF && headerDetectBuff[1] == 0xD8) {
+                    printf("Found JPEG header\r\n");
+                    jpegStarted = true;
+
+                    // Open file for writing
+                    fileResult = f_open(&jpegFile, uniqueFilename, FA_CREATE_ALWAYS | FA_WRITE);
+                    if (fileResult != FR_OK) {
+                        printf("Failed to create file: %d\r\n", fileResult);
+                        return;
+                    }
+
+                    // Write the JPEG header (0xFF 0xD8)
+                    uint8_t jpegHeader[2] = {0xFF, 0xD8};
+                    f_write(&jpegFile, jpegHeader, 2, &bytesWritten);
+
+                    // Initialize buffer for new data
+                    bufferOffset = 0;
+                }
+                // Check for JPEG end marker (0xFF 0xD9)
+                else if (jpegStarted && headerDetectBuff[0] == 0xFF && headerDetectBuff[1] == 0xD9) {
+                    printf("Found JPEG end marker\r\n");
+                    jpegEnded = true;
+
+                    // Write accumulated data up to end marker
+                    if (bufferOffset > 0) {
+                        f_write(&jpegFile, imageBuff + i - bufferOffset, bufferOffset, &bytesWritten);
+                    }
+
+                    // Write the end marker itself
+                    uint8_t jpegFooter[2] = {0xFF, 0xD9};
+                    f_write(&jpegFile, jpegFooter, 2, &bytesWritten);
+
+                    // Close the file
+                    f_close(&jpegFile);
+                    break;
+                }
+                // If we've started the JPEG but not yet found the end
+                else if (jpegStarted) {
+                    // Accumulate data in our buffer
+                    bufferOffset++;
+
+                    // If our buffer is full, write it to file
+                    if (bufferOffset >= READ_IMAGE_LENGTH - 2) { // -2 to keep space for marker detection
+                        f_write(&jpegFile, imageBuff + i - bufferOffset + 1, bufferOffset, &bytesWritten);
+                        bufferOffset = 0;
+                    }
+                }
+            }
+
+            // If we have accumulated data and didn't just end the JPEG, write it
+            if (jpegStarted && !jpegEnded && bufferOffset > 0) {
+                f_write(&jpegFile, imageBuff + actualRead - bufferOffset, bufferOffset, &bytesWritten);
+                bufferOffset = 0;
+            }
+        }
+    }
+
+    // Clean up if we didn't properly finish
+    if (jpegStarted && !jpegEnded) {
+        f_close(&jpegFile);
+        printf("Warning: JPEG end marker not found\r\n");
+    }
+
+    printf("Image capture and save complete\r\n");
+}
+
 /* USER CODE END 0 */
 
 /**
