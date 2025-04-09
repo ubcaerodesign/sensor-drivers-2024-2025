@@ -475,35 +475,35 @@ FRESULT cameraRecordVideoDMA(ArducamCamera* camera, uint16_t numFrames, CAM_IMAG
     // Process frames using DMA for higher efficiency
     while (camera->receivedLength > 0 && frame_cnt < numFrames) {
         // Determine how much data to read in this iteration
-        uint32_t bytesToRead = (camera->receivedLength > maxDmaTransfer) ? 
+        uint32_t bytesToRead = (camera->receivedLength > maxDmaTransfer) ?
                                maxDmaTransfer : camera->receivedLength;
-        
+
         // Read data using DMA
         uint32_t actualRead = readBuffDMA(camera, imageBuff, bytesToRead);
-        
+
         if (actualRead == 0) {
             printf("Error reading from camera\r\n");
             break;
         }
-        
+
         // Process the buffer to find JPEG markers
         for (uint32_t i = 0; i < actualRead; i++) {
             // Update detection buffer
             headerDetectBuff[0] = headerDetectBuff[1];
             headerDetectBuff[1] = imageBuff[i];
-            
+
             // Check for JPEG start marker (0xFF 0xD8)
             if (!jpegStarted && headerDetectBuff[0] == 0xFF && headerDetectBuff[1] == 0xD8) {
                 jpegStarted = true;
                 jpeg_size = 0;
                 frameBufferSize = 0;
-                
+
                 // Write "00dc" tag (video data chunk)
                 f_write(&aviFile, "00dc", 4, &bytesWritten);
-                
+
                 // Reserve space for chunk size (will update later)
                 f_write(&aviFile, zero_buf, 4, &bytesWritten);
-                
+
                 // Write JPEG header
                 f_write(&aviFile, headerDetectBuff, 2, &bytesWritten);
                 jpeg_size += 2;
@@ -516,29 +516,29 @@ FRESULT cameraRecordVideoDMA(ArducamCamera* camera, uint16_t numFrames, CAM_IMAG
                 }
                 f_write(&aviFile, headerDetectBuff + 1, 1, &bytesWritten); // Write the 0xD9 byte
                 jpeg_size += frameBufferSize + 1;
-                
+
                 // Calculate padding for 4-byte alignment
                 remnant = (4 - (jpeg_size & 0x00000003)) & 0x00000003;
                 jpeg_size = jpeg_size + remnant;
                 movi_size = movi_size + jpeg_size + 8; // +8 for chunk header (00dc + size)
-                
+
                 // Add padding if needed
                 if (remnant > 0) {
                     f_write(&aviFile, zero_buf, remnant, &bytesWritten);
                 }
-                
+
                 // Update chunk size
                 position = f_tell(&aviFile);
                 f_lseek(&aviFile, position - remnant - jpeg_size - 4);
                 print_quartet(jpeg_size, &aviFile);
-                
+
                 // Write AVI1 index
                 f_lseek(&aviFile, position - remnant - jpeg_size + 2);
                 f_write(&aviFile, "AVI1", 4, &bytesWritten);
-                
+
                 // Return to end of file for next frame
                 f_lseek(&aviFile, position);
-                
+
                 // Reset for next frame
                 jpegStarted = false;
                 frame_cnt++;
@@ -547,7 +547,7 @@ FRESULT cameraRecordVideoDMA(ArducamCamera* camera, uint16_t numFrames, CAM_IMAG
             // Accumulate JPEG data
             else if (jpegStarted) {
                 frameBufferSize++;
-                
+
                 // If buffer is getting full, write it to file
                 if (frameBufferSize >= READ_IMAGE_LENGTH - 2) {
                     f_write(&aviFile, imageBuff + i - frameBufferSize + 1, frameBufferSize, &bytesWritten);
@@ -556,7 +556,7 @@ FRESULT cameraRecordVideoDMA(ArducamCamera* camera, uint16_t numFrames, CAM_IMAG
                 }
             }
         }
-        
+
         // If we have accumulated data for a frame in progress, write it
         if (jpegStarted && frameBufferSize > 0) {
             f_write(&aviFile, imageBuff + actualRead - frameBufferSize, frameBufferSize, &bytesWritten);
@@ -667,6 +667,7 @@ int main(void)
 		printf("TEST_REG write-read verification failed!\r\n");
 	}*/
 
+  SPI_DMA_INIT();
   printf("Initializing Arducam...\r\n");
   myCAM = createArducamCamera(CS);  // Create camera object with CS pin
   setupCamera(&myCAM);
@@ -677,7 +678,7 @@ int main(void)
   printf("camera heartbeat: %d\r\n", test);
 
   // Capture a single picture
-  cameraCaptureAndSaveImage(&myCAM);
+  cameraCaptureAndSaveImageDMA(&myCAM);
 
   if(f_mount(&SDFatFS, "", 1) != FR_OK) {
       printf("SD card mount failed\r\n");
@@ -687,7 +688,7 @@ int main(void)
   }
 
   for (int i = 0; i < 10; i++) {
-	  cameraCaptureAndSaveImage(&myCAM);
+	  cameraCaptureAndSaveImageDMA(&myCAM);
   }
 
 
