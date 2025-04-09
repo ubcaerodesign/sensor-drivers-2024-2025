@@ -999,6 +999,100 @@ CamStatus setImageQuality(ArducamCamera* camera, IMAGE_QUALITY qualtiy)
     return camera->arducamCameraOp->setImageQuality(camera, qualtiy);
 }
 
+/**
+ * @brief Read image data with specified length to buffer using DMA
+ *
+ * @param  camera ArducamCamera instance
+ * @param  buff Buffer for storing camera data
+ * @param  length The length of the available data to be read
+ *
+ * @return Returns the length actually read
+ */
+uint32_t cameraReadBuffDMA(ArducamCamera* camera, uint8_t* buff, uint32_t length)
+{
+    if (imageAvailable(camera) == 0 || (length == 0)) {
+        return 0;
+    }
+
+    if (camera->receivedLength < length) {
+        length = camera->receivedLength;
+    }
+
+    /* Prepare dummy TX buffer for SPI operation */
+    uint8_t* dummyTxBuff = malloc(length);
+    if (dummyTxBuff == NULL) {
+        printf("Failed to allocate memory for DMA transfer\n");
+        return 0;
+    }
+
+    /* Clear dummy buffer */
+    memset(dummyTxBuff, 0, length);
+
+    /* Start FIFO burst mode */
+    arducamSpiCsPinLow(camera->csPin);
+    setFifoBurst(camera);
+
+    /* For first burst read, send an additional dummy byte */
+    if (camera->burstFirstFlag == 0) {
+        uint8_t dummy = 0;
+        arducamSpiTransfer(dummy);
+        camera->burstFirstFlag = 1;
+    }
+
+    /* Perform DMA transfer */
+    HAL_StatusTypeDef status = Camera_TransmitReceiveDMA(dummyTxBuff, buff, length);
+
+    if (status != HAL_OK) {
+        printf("DMA transfer failed with status: %d\n", status);
+        free(dummyTxBuff);
+        arducamSpiCsPinHigh(camera->csPin);
+        return 0;
+    }
+
+    /* Wait for DMA completion */
+    SPI_DMA_WaitForCompletion();
+
+    /* Release CS and update received length */
+    arducamSpiCsPinHigh(camera->csPin);
+    camera->receivedLength -= length;
+
+    /* Free the dummy buffer */
+    free(dummyTxBuff);
+
+    return length;
+}
+
+/**
+ * @brief Set FIFO burst read mode on the camera with DMA support
+ *
+ * @param camera ArducamCamera instance
+ */
+void cameraSetFifoBurstDMA(ArducamCamera* camera)
+{
+    /* Send BURST_FIFO_READ command */
+    uint8_t command = BURST_FIFO_READ;
+
+    /* Use standard transfer for command - this is just a single byte */
+    arducamSpiTransfer(command);
+}
+
+/**
+ * @brief Wrapper function for readBuffDMA
+ */
+uint32_t readBuffDMA(ArducamCamera* camera, uint8_t* buff, uint32_t length)
+{
+    return camera->arducamCameraOp->readBuffDMA(camera, buff, length);
+}
+
+/**
+ * @brief Wrapper function for setFifoBurstDMA
+ */
+void setFifoBurstDMA(ArducamCamera* camera)
+{
+    camera->arducamCameraOp->setFifoBurstDMA(camera);
+}
+
+
 const struct CameraOperations ArducamcameraOperations = {
     .reset                   = cameraReset,
     .begin                   = cameraBegin,
@@ -1044,6 +1138,9 @@ const struct CameraOperations ArducamcameraOperations = {
     .lowPowerOn              = cameraLowPowerOn,
     .lowPowerOff             = cameraLowPowerOff,
     .setImageQuality         = cameraSetImageQuality,
+
+	.readBuffDMA			 = cameraReadBuffDMA,
+	.setFifoBurstDMA		 = cameraSetFifoBurstDMA,
 };
 
 ArducamCamera createArducamCamera(int CS)
