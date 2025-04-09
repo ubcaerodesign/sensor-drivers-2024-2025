@@ -422,124 +422,177 @@ void cameraCaptureAndSaveImage(ArducamCamera* camera) {
     printf("DONE, saved to SD card..\r\n");
 }
 
-/**
- * @brief Captures an image and saves it to SD card using DMA for efficient data transfer
- *
- * @param camera ArducamCamera instance
- */
-void cameraCaptureAndSaveImageDMA(ArducamCamera* camera) {
-    uint8_t imageBuff[READ_IMAGE_LENGTH]; // Buffer to store image data
-    char uniqueFilename[32];
-    uint8_t headerDetectBuff[2] = {0, 0}; // Buffer to detect JPEG markers
-    uint32_t bytesToRead = 0;
-    uint32_t bufferOffset = 0;
-    bool jpegStarted = false;
-    bool jpegEnded = false;
-    FIL jpegFile;
-    FRESULT fileResult;
-    UINT bytesWritten;
 
-    printf("Taking picture with DMA...\r\n");
+FRESULT cameraRecordVideoDMA(ArducamCamera* camera, uint16_t numFrames, CAM_IMAGE_MODE resolution) {
+    uint8_t imageBuff[READ_IMAGE_LENGTH] = {0};  // Buffer for image data
+    char videoFilename[32];                // Buffer for file name
+    FRESULT res;                           // File operation result
+    FIL aviFile;                           // File object
+    uint32_t movi_size = 0;                // Size of movie data
+    uint16_t frame_cnt = 0;                // Frame counter
+    uint32_t jpeg_size = 0;                // Size of current JPEG frame
+    uint8_t remnant = 0;                   // Padding bytes needed
+    uint32_t position = 0;                 // File position
+    bool jpegStarted = false;              // Flag to track JPEG data
+    uint8_t headerDetectBuff[2] = {0, 0};  // Buffer to detect JPEG markers
+    uint32_t frameBufferSize = 0;          // Current frame buffer size
+    uint32_t maxDmaTransfer = READ_IMAGE_LENGTH; // Maximum DMA transfer size
+    UINT bytesWritten;                     // Bytes written to file
 
-    // Generate unique filename
-    generateImgName(uniqueFilename, sizeof(uniqueFilename));
-    printf("Saving as: %s\r\n", uniqueFilename);
-
-    // Capture the image
-    takePicture(camera, CAM_IMAGE_MODE_VGA, CAM_IMAGE_PIX_FMT_JPG);
-    printf("Image capture complete, size: %ld bytes\r\n", camera->receivedLength);
-
-    // Mount the filesystem
-    if (f_mount(&SDFatFS, "", 0) != FR_OK) {
-        printf("Failed to mount SD card\r\n");
-        return;
+    // Limit frames to maximum
+    if (numFrames > FRAMES_NUM) {
+        numFrames = FRAMES_NUM;
     }
 
-    // Use a state machine approach for processing the JPEG data
-    while (camera->receivedLength > 0 && !jpegEnded) {
-        // Read data in chunks using DMA for efficiency
-        bytesToRead = (camera->receivedLength > READ_IMAGE_LENGTH) ?
-                       READ_IMAGE_LENGTH : camera->receivedLength;
+    // Generate unique filename for the video
+    generateVideoFilename(videoFilename, sizeof(videoFilename));
+    printf("Recording video as: %s\r\n", videoFilename);
 
-        if (bytesToRead > 0) {
-            uint32_t actualRead = readBuffDMA(camera, imageBuff, bytesToRead);
+    // Mount the SD card and open the file
+    if (f_mount(&SDFatFS, "", 0) != FR_OK) {
+        printf("SD Card mount failed\r\n");
+        return FR_DISK_ERR;
+    }
 
-            if (actualRead == 0) {
-                printf("Error reading from camera\r\n");
-                break;
+    res = f_open(&aviFile, videoFilename, FA_CREATE_ALWAYS | FA_WRITE);
+    if (res != FR_OK) {
+        printf("File open failed: %d\r\n", res);
+        return res;
+    }
+
+    printf("File opened. Writing AVI header...\r\n");
+
+    // Write AVI header
+    f_write(&aviFile, avi_header, AVIOFFSET, &bytesWritten);
+
+    printf("Starting video capture...\r\n");
+
+    // Start the multi-picture capture process
+    takeMultiPictures(camera, resolution, CAM_IMAGE_PIX_FMT_JPG, numFrames);
+
+    printf("Capturing frames...\r\n");
+
+    // Process frames using DMA for higher efficiency
+    while (camera->receivedLength > 0 && frame_cnt < numFrames) {
+        // Determine how much data to read in this iteration
+        uint32_t bytesToRead = (camera->receivedLength > maxDmaTransfer) ? 
+                               maxDmaTransfer : camera->receivedLength;
+        
+        // Read data using DMA
+        uint32_t actualRead = readBuffDMA(camera, imageBuff, bytesToRead);
+        
+        if (actualRead == 0) {
+            printf("Error reading from camera\r\n");
+            break;
+        }
+        
+        // Process the buffer to find JPEG markers
+        for (uint32_t i = 0; i < actualRead; i++) {
+            // Update detection buffer
+            headerDetectBuff[0] = headerDetectBuff[1];
+            headerDetectBuff[1] = imageBuff[i];
+            
+            // Check for JPEG start marker (0xFF 0xD8)
+            if (!jpegStarted && headerDetectBuff[0] == 0xFF && headerDetectBuff[1] == 0xD8) {
+                jpegStarted = true;
+                jpeg_size = 0;
+                frameBufferSize = 0;
+                
+                // Write "00dc" tag (video data chunk)
+                f_write(&aviFile, "00dc", 4, &bytesWritten);
+                
+                // Reserve space for chunk size (will update later)
+                f_write(&aviFile, zero_buf, 4, &bytesWritten);
+                
+                // Write JPEG header
+                f_write(&aviFile, headerDetectBuff, 2, &bytesWritten);
+                jpeg_size += 2;
             }
-
-            // Process the buffer to detect JPEG markers
-            for (uint32_t i = 0; i < actualRead; i++) {
-                // Shift buffer to track potential JPEG markers
-                headerDetectBuff[0] = headerDetectBuff[1];
-                headerDetectBuff[1] = imageBuff[i];
-
-                // Check for JPEG start marker (0xFF 0xD8)
-                if (!jpegStarted && headerDetectBuff[0] == 0xFF && headerDetectBuff[1] == 0xD8) {
-                    printf("Found JPEG header\r\n");
-                    jpegStarted = true;
-
-                    // Open file for writing
-                    fileResult = f_open(&jpegFile, uniqueFilename, FA_CREATE_ALWAYS | FA_WRITE);
-                    if (fileResult != FR_OK) {
-                        printf("Failed to create file: %d\r\n", fileResult);
-                        return;
-                    }
-
-                    // Write the JPEG header (0xFF 0xD8)
-                    uint8_t jpegHeader[2] = {0xFF, 0xD8};
-                    f_write(&jpegFile, jpegHeader, 2, &bytesWritten);
-
-                    // Initialize buffer for new data
-                    bufferOffset = 0;
+            // Check for JPEG end marker (0xFF 0xD9)
+            else if (jpegStarted && headerDetectBuff[0] == 0xFF && headerDetectBuff[1] == 0xD9) {
+                // Write accumulated data plus end marker
+                if (frameBufferSize > 0) {
+                    f_write(&aviFile, imageBuff + i - frameBufferSize, frameBufferSize, &bytesWritten);
                 }
-                // Check for JPEG end marker (0xFF 0xD9)
-                else if (jpegStarted && headerDetectBuff[0] == 0xFF && headerDetectBuff[1] == 0xD9) {
-                    printf("Found JPEG end marker\r\n");
-                    jpegEnded = true;
-
-                    // Write accumulated data up to end marker
-                    if (bufferOffset > 0) {
-                        f_write(&jpegFile, imageBuff + i - bufferOffset, bufferOffset, &bytesWritten);
-                    }
-
-                    // Write the end marker itself
-                    uint8_t jpegFooter[2] = {0xFF, 0xD9};
-                    f_write(&jpegFile, jpegFooter, 2, &bytesWritten);
-
-                    // Close the file
-                    f_close(&jpegFile);
-                    break;
+                f_write(&aviFile, headerDetectBuff + 1, 1, &bytesWritten); // Write the 0xD9 byte
+                jpeg_size += frameBufferSize + 1;
+                
+                // Calculate padding for 4-byte alignment
+                remnant = (4 - (jpeg_size & 0x00000003)) & 0x00000003;
+                jpeg_size = jpeg_size + remnant;
+                movi_size = movi_size + jpeg_size + 8; // +8 for chunk header (00dc + size)
+                
+                // Add padding if needed
+                if (remnant > 0) {
+                    f_write(&aviFile, zero_buf, remnant, &bytesWritten);
                 }
-                // If we've started the JPEG but not yet found the end
-                else if (jpegStarted) {
-                    // Accumulate data in our buffer
-                    bufferOffset++;
-
-                    // If our buffer is full, write it to file
-                    if (bufferOffset >= READ_IMAGE_LENGTH - 2) { // -2 to keep space for marker detection
-                        f_write(&jpegFile, imageBuff + i - bufferOffset + 1, bufferOffset, &bytesWritten);
-                        bufferOffset = 0;
-                    }
+                
+                // Update chunk size
+                position = f_tell(&aviFile);
+                f_lseek(&aviFile, position - remnant - jpeg_size - 4);
+                print_quartet(jpeg_size, &aviFile);
+                
+                // Write AVI1 index
+                f_lseek(&aviFile, position - remnant - jpeg_size + 2);
+                f_write(&aviFile, "AVI1", 4, &bytesWritten);
+                
+                // Return to end of file for next frame
+                f_lseek(&aviFile, position);
+                
+                // Reset for next frame
+                jpegStarted = false;
+                frame_cnt++;
+                frameBufferSize = 0;
+            }
+            // Accumulate JPEG data
+            else if (jpegStarted) {
+                frameBufferSize++;
+                
+                // If buffer is getting full, write it to file
+                if (frameBufferSize >= READ_IMAGE_LENGTH - 2) {
+                    f_write(&aviFile, imageBuff + i - frameBufferSize + 1, frameBufferSize, &bytesWritten);
+                    jpeg_size += frameBufferSize;
+                    frameBufferSize = 0;
                 }
             }
-
-            // If we have accumulated data and didn't just end the JPEG, write it
-            if (jpegStarted && !jpegEnded && bufferOffset > 0) {
-                f_write(&jpegFile, imageBuff + actualRead - bufferOffset, bufferOffset, &bytesWritten);
-                bufferOffset = 0;
-            }
+        }
+        
+        // If we have accumulated data for a frame in progress, write it
+        if (jpegStarted && frameBufferSize > 0) {
+            f_write(&aviFile, imageBuff + actualRead - frameBufferSize, frameBufferSize, &bytesWritten);
+            jpeg_size += frameBufferSize;
+            frameBufferSize = 0;
         }
     }
 
-    // Clean up if we didn't properly finish
-    if (jpegStarted && !jpegEnded) {
-        f_close(&jpegFile);
-        printf("Warning: JPEG end marker not found\r\n");
-    }
+    printf("Finished capturing. Updating AVI header...\r\n");
 
-    printf("Image capture and save complete\r\n");
+    // Update AVI header with final information
+    f_lseek(&aviFile, 4);
+    print_quartet(movi_size + 12 * frame_cnt + 4, &aviFile);
+
+    uint32_t us_per_frame = 1000000 / FRAME_RATE;
+    f_lseek(&aviFile, 0x20);
+    print_quartet(us_per_frame, &aviFile);
+
+    uint32_t max_bytes_per_sec = (frame_cnt > 0) ? (movi_size * FRAME_RATE / frame_cnt) : 0;
+    f_lseek(&aviFile, 0x24);
+    print_quartet(max_bytes_per_sec, &aviFile);
+
+    f_lseek(&aviFile, 0x30);
+    print_quartet(frame_cnt, &aviFile); //frame count
+
+    f_lseek(&aviFile, 0xe0);
+    print_quartet(frame_cnt, &aviFile);
+
+    f_lseek(&aviFile, 0xe8);
+    print_quartet(movi_size, &aviFile);
+
+    f_close(&aviFile);
+
+    printf("Video recording complete. Saved %d frames.\r\n", frame_cnt);
+
+    return FR_OK;
 }
 
 /* USER CODE END 0 */
