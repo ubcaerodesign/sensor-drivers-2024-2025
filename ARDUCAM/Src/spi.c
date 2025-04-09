@@ -9,16 +9,104 @@
 #include "spi.h"
 
 extern SPI_HandleTypeDef hspi3;
+extern DMA_HandleTypeDef hdma_spi3_tx;
+extern DMA_HandleTypeDef hdma_spi3_rx;
 
-/*uint8_t arducamSpiTransfer(uint8_t TxData)
+static volatile bool spi_dma_tx_complete = true;
+static volatile bool spi_dma_rx_complete = true;
+static volatile uint32_t dma_timeout = 1000; // Default timeout in ms
+
+void SPI_DMA_Init(void)
 {
-    uint8_t RxData = 0;
-    if (HAL_SPI_TransmitReceive(&hspi3, &TxData, &RxData, 1, 10) == HAL_OK)
-    {
-        return RxData;
+    /* Make sure DMA streams are disabled */
+    HAL_DMA_DeInit(&hdma_spi3_tx);
+    HAL_DMA_DeInit(&hdma_spi3_rx);
+    
+    /* Initialize flags */
+    spi_dma_tx_complete = true;
+    spi_dma_rx_complete = true;
+}
+
+/**
+ * @brief  Callback for TX DMA completion
+ * @param  hspi Pointer to SPI handle
+ * @retval None
+ */
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    if (hspi->Instance == SPI3) {
+        spi_dma_tx_complete = true;
     }
-    return 0;  // Timeout/Error
-}*/
+}
+
+/**
+ * @brief  Callback for RX DMA completion
+ * @param  hspi Pointer to SPI handle
+ * @retval None
+ */
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    if (hspi->Instance == SPI3) {
+        spi_dma_rx_complete = true;
+    }
+}
+
+/**
+ * @brief  Callback for TX/RX DMA completion
+ * @param  hspi Pointer to SPI handle
+ * @retval None
+ */
+void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    if (hspi->Instance == SPI3) {
+        spi_dma_tx_complete = true;
+        spi_dma_rx_complete = true;
+    }
+}
+
+/**
+ * @brief  Callback for SPI error
+ * @param  hspi Pointer to SPI handle
+ * @retval None
+ */
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
+{
+    if (hspi->Instance == SPI3) {
+        printf("SPI DMA error occurred: %ld\n", hspi->ErrorCode);
+        spi_dma_tx_complete = true;
+        spi_dma_rx_complete = true;
+    }
+}
+
+/**
+ * @brief  Checks if DMA transfer is in progress
+ * @retval true if busy, false if idle
+ */
+bool SPI_DMA_IsBusy(void)
+{
+    return (!spi_dma_tx_complete || !spi_dma_rx_complete);
+}
+
+/**
+ * @brief  Wait for DMA transfer completion
+ * @retval None
+ */
+void SPI_DMA_WaitForCompletion(void)
+{
+    uint32_t timeout = HAL_GetTick() + dma_timeout;
+    
+    while (SPI_DMA_IsBusy()) {
+        if (HAL_GetTick() >= timeout) {
+            printf("SPI DMA timeout occurred\n");
+            // Force completion to avoid deadlock
+            spi_dma_tx_complete = true;
+            spi_dma_rx_complete = true;
+            break;
+        }
+    }
+}
+
+
 uint8_t arducamSpiTransfer(uint8_t TxData)
 {
     uint8_t RxData = 0;
