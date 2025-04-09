@@ -322,6 +322,9 @@ struct CameraOperations {
     void (*lowPowerOn)(ArducamCamera*);
     void (*lowPowerOff)(ArducamCamera*);
     void (*registerCallback)(ArducamCamera*, BUFFER_CALLBACK, uint8_t, STOP_HANDLE);
+
+    uint32_t (*readBuffDMA)(ArducamCamera*, uint8_t*, uint32_t);
+    void (*setFifoBurstDMA)(ArducamCamera*);
 };
 
 /// @endcond
@@ -693,6 +696,29 @@ void lowPowerOff(ArducamCamera* camera);
 //! @return Returns camera status
 //**********************************************
 uint8_t cameraHeartBeat(ArducamCamera* camera);
+
+//**********************************************
+//!
+//! @brief Read image data with specified length to buffer using DMA
+//!
+//! @param  camera ArducamCamera instance
+//! @param  buff Buffer for storing camera data
+//! @param  length The length of the available data to be read
+//!
+//! @return Returns the length actually read
+//!
+//! @note This function uses DMA for efficient data transfer
+//**********************************************
+uint32_t readBuffDMA(ArducamCamera* camera, uint8_t* buff, uint32_t length);
+
+//**********************************************
+//!
+//! @brief Set FIFO burst read mode with DMA support
+//!
+//! @param camera ArducamCamera instance
+//!
+//**********************************************
+void setFifoBurstDMA(ArducamCamera* camera);
 
 typedef enum { Camera_uninit = 0, Camera_init, Camera_open, Camera_close } CameraStatus;
 
