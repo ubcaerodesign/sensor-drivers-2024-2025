@@ -56,6 +56,8 @@
 SD_HandleTypeDef hsd2;
 
 SPI_HandleTypeDef hspi3;
+DMA_HandleTypeDef hdma_spi3_rx;
+DMA_HandleTypeDef hdma_spi3_tx;
 
 UART_HandleTypeDef huart8;
 
@@ -113,11 +115,22 @@ FRESULT res;
 void SystemClock_Config(void);
 static void MPU_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_SDMMC2_SD_Init(void);
 static void MX_UART8_Init(void);
 static void MX_SPI3_Init(void);
 /* USER CODE BEGIN PFP */
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+
+void print_quartet(uint32_t i, FIL* fd);
+FRESULT fileExists(const TCHAR* path);
+void generateVideoFilename(char* filename, size_t size);
+void generateImgName(char* filename, size_t size);
+void setupCamera(ArducamCamera* camera);
+FRESULT cameraRecordVideo(ArducamCamera* camera, uint16_t numFrames, CAM_IMAGE_MODE resolution);
+void cameraCaptureAndSaveImage(ArducamCamera* camera);
+void cameraCaptureAndSaveImageDMA(ArducamCamera* camera);
+FRESULT cameraRecordVideoDMA(ArducamCamera* camera, uint16_t numFrames, CAM_IMAGE_MODE resolution);
 
 /* USER CODE END PFP */
 
@@ -443,6 +456,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_SDMMC2_SD_Init();
   MX_UART8_Init();
   MX_FATFS_Init();
@@ -512,8 +526,7 @@ int main(void)
   {
 
     /* USER CODE END WHILE */
-	  cameraRecordVideo(&myCAM, 60, CAM_IMAGE_MODE_QVGA);
-	  HAL_Delay(3000);
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -698,6 +711,25 @@ static void MX_UART8_Init(void)
   /* USER CODE BEGIN UART8_Init 2 */
 
   /* USER CODE END UART8_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
+  /* DMA1_Stream1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
 
 }
 
