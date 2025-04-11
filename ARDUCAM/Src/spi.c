@@ -95,7 +95,7 @@ bool SPI_DMA_IsBusy(void)
  * @brief  Wait for DMA transfer completion
  * @retval None
  */
-void SPI_DMA_WaitForCompletion(void)
+bool SPI_DMA_WaitForCompletion(void)
 {
     uint32_t timeout = HAL_GetTick() + dma_timeout;
 
@@ -105,9 +105,13 @@ void SPI_DMA_WaitForCompletion(void)
             // Force completion to avoid deadlock
             spi_dma_tx_complete = true;
             spi_dma_rx_complete = true;
-            break;
+            return false;
         }
+
+        HAL_Delay(1);
     }
+
+    return true;
 }
 
 
@@ -248,6 +252,9 @@ HAL_StatusTypeDef Camera_TransmitReceiveDMA(uint8_t* txData, uint8_t* rxData, ui
     spi_dma_rx_complete = false;
 
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET); // CS Low
+
+    HAL_Delay(1); // adding a delay to ensure CS is stable
+
     HAL_StatusTypeDef status = HAL_SPI_TransmitReceive_DMA(&hspi3, txData, rxData, size);
 
     if (status != HAL_OK) {
@@ -255,7 +262,15 @@ HAL_StatusTypeDef Camera_TransmitReceiveDMA(uint8_t* txData, uint8_t* rxData, ui
         spi_dma_tx_complete = true;
         spi_dma_rx_complete = true;
         printf("DMA TransmitReceive error: %d\n", status);
+        return status;
     }
+
+    if (!SPI_DMA_WaitForCompletion()) {
+    	printf("DMA timeout occurred\n");
+    	HAL_SPI_DMAStop(&hspi3);
+    }
+
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);
 
     return status;
 }
