@@ -19,12 +19,16 @@ static volatile uint32_t dma_timeout = 1000; // Default timeout in ms
 void SPI_DMA_Init(void)
 {
     /* Make sure DMA streams are disabled */
-    HAL_DMA_DeInit(&hdma_spi3_tx);
-    HAL_DMA_DeInit(&hdma_spi3_rx);
+    HAL_SPI_DMAStop(&hspi3);
+
+    __HAL_LINKDMA(&hspi3, hdmatx, hdma_spi3_tx);
+    __HAL_LINKDMA(&hspi3, hdmarx, hdma_spi3_rx);
 
     /* Initialize flags */
     spi_dma_tx_complete = true;
     spi_dma_rx_complete = true;
+
+    printf("SPI DMA initialized!!!!");
 }
 
 /**
