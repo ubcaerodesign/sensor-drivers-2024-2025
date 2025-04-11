@@ -28,6 +28,6 @@ HAL_StatusTypeDef Camera_WriteBurstDMA(uint8_t* txData, uint16_t size);
 HAL_StatusTypeDef Camera_ReadBurstDMA(uint8_t* rxData, uint16_t size);
 HAL_StatusTypeDef Camera_TransmitReceiveDMA(uint8_t* txData, uint8_t* rxData, uint16_t size);
 bool SPI_DMA_IsBusy(void);
-void SPI_DMA_WaitForCompletion(void);
+bool SPI_DMA_WaitForCompletion(void);
 
 #endif
